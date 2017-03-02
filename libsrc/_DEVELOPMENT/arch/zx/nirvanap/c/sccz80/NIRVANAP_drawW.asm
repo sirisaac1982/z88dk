@@ -11,7 +11,7 @@ SECTION code_nirvanap
 
 PUBLIC NIRVANAP_drawW
 
-EXTERN asm_NIRVANAP_drawW
+EXTERN asm_NIRVANAP_drawW_di
 
 NIRVANAP_drawW:
 
@@ -25,4 +25,4 @@ NIRVANAP_drawW:
    	inc hl
    	ld a,(hl)       ; tile
 
-   	jp asm_NIRVANAP_drawW
+   	jp asm_NIRVANAP_drawW_di

@@ -5,6 +5,7 @@
 #ifndef __NIRVANA_PLUS_H__
 #define __NIRVANA_PLUS_H__
 
+#include <arch.h>
 #include <intrinsic.h>
 
 /* ----------------------------------------------------------------
@@ -16,15 +17,11 @@
  * ----------------------------------------------------------------
  */
 
-#ifndef NIRVANAP_TOTAL_ROWS
-#define NIRVANAP_TOTAL_ROWS 23
-#endif
-
 // ----------------------------------------------------------------
 // Activate NIRVANA ENGINE
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_start(void);
+extern void __LIB__ NIRVANAP_start(void) __smallc;
 
 
 
@@ -32,7 +29,7 @@ extern void __LIB__ NIRVANAP_start(void);
 // Deactivate NIRVANA ENGINE
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_stop(void);
+extern void __LIB__ NIRVANAP_stop(void) __smallc;
 
 
 
@@ -56,16 +53,16 @@ extern void __LIB__ NIRVANAP_stop(void);
 // Location of NIRVANA ISR hook
 // ----------------------------------------------------------------
 
-#ifdef __CLANG
-   static unsigned char NIRVANAP_isr[3];
-#endif
+extern unsigned char NIRVANAP_ISR_HOOK[3];
 
-#ifdef __SDCC
-   __at (56698+328*NIRVANAP_TOTAL_ROWS) static unsigned char NIRVANAP_isr[3];
-#endif
+// ----------------------------------------------------------------
+// Location and size of NIRVANA hole
+// ----------------------------------------------------------------
 
-#ifdef __SCCZ80
-   static unsigned char NIRVANAP_isr[3] @ (56698+328*NIRVANAP_TOTAL_ROWS);
+#define NIRVANAP_HOLE_SIZE  __NIRVANAP_HOLE_SIZE
+
+#if NIRVANAP_HOLE_SIZE > 0
+extern unsigned char NIRVANAP_HOLE[NIRVANAP_HOLE_SIZE];
 #endif
 
 // ----------------------------------------------------------------
@@ -76,17 +73,17 @@ extern void __LIB__ NIRVANAP_stop(void);
 //     lin: pixel line (0-200, even values only)
 //     col: char column (0-30)
 //
-// WARNING: If this routine is under execution when interrupt
+// WARNING: If the *_raw routine is under execution when interrupt
 //          occurs, program may crash!!! (see NIRVANAP_halt)
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_drawT(unsigned char tile,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_drawT_callee(unsigned char tile,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_drawT(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_drawT_callee(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_drawT(a,b,c) NIRVANAP_drawT_callee(a,b,c)
 
 
-extern void __LIB__ NIRVANAP_drawT_raw(unsigned char tile,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_drawT_raw_callee(unsigned char tile,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_drawT_raw(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_drawT_raw_callee(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_drawT_raw(a,b,c) NIRVANAP_drawT_raw_callee(a,b,c)
 
 
@@ -101,17 +98,17 @@ extern void __LIB__ __CALLEE__ NIRVANAP_drawT_raw_callee(unsigned char tile,unsi
 //     lin: pixel line (0-200, even values only)
 //     col: char column (0-30)
 //
-// WARNING: If this routine is under execution when interrupt
+// WARNING: If the *_raw routine is under execution when interrupt
 //          occurs, program may crash!!! (see NIRVANAhalt)
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_fillT(unsigned char attr,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_fillT_callee(unsigned char attr,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_fillT(unsigned char attr,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_fillT_callee(unsigned char attr,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_fillT(a,b,c) NIRVANAP_fillT_callee(a,b,c)
 
 
-extern void __LIB__ NIRVANAP_fillT_raw(unsigned char attr,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_fillT_raw_callee(unsigned char attr,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_fillT_raw(unsigned char attr,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_fillT_raw_callee(unsigned char attr,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_fillT_raw(a,b,c) NIRVANAP_fillT_raw_callee(a,b,c)
 
 
@@ -127,8 +124,8 @@ extern void __LIB__ __CALLEE__ NIRVANAP_fillT_raw_callee(unsigned char attr,unsi
 //     col: char column (0-31)
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_printC(unsigned char ch,void *attrs,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_printC_callee(unsigned char ch,void *attrs,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_printC(unsigned char ch,void *attrs,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_printC_callee(unsigned char ch,void *attrs,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_printC(a,b,c,d) NIRVANAP_printC_callee(a,b,c,d)
 
 
@@ -143,9 +140,24 @@ extern void __LIB__ __CALLEE__ NIRVANAP_printC_callee(unsigned char ch,void *att
 //     col: char column (0-31)
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_paintC(void *attrs,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_paintC_callee(void *attrs,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_paintC(void *attrs,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_paintC_callee(void *attrs,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_paintC(a,b,c) NIRVANAP_paintC_callee(a,b,c)
+
+
+
+// -----------------------------------------------------------------------------
+// Retrieve a sequence of 4 attribute values from specified 8x8 block
+//
+// Parameters:
+//     attrs: destination for read sequence
+//     lin: pixel line (16-192, even values only)
+//     col: char column (0-31)
+// -----------------------------------------------------------------------------
+
+extern void __LIB__ NIRVANAP_readC(void *attrs,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_readC_callee(void *attrs,unsigned char lin,unsigned char col) __smallc;
+#define NIRVANAP_readC(a,b,c) NIRVANAP_readC_callee(a,b,c)
 
 
 
@@ -160,8 +172,8 @@ extern void __LIB__ __CALLEE__ NIRVANAP_paintC_callee(void *attrs,unsigned char 
 //     col: char column (0-31)
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_fillC(unsigned char attr,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_fillC_callee(unsigned char attr,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_fillC(unsigned char attr,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_fillC_callee(unsigned char attr,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_fillC(a,b,c) NIRVANAP_fillC_callee(a,b,c)
 
 
@@ -191,13 +203,13 @@ extern void __LIB__ __CALLEE__ NIRVANAP_fillC_callee(unsigned char attr,unsigned
 //          NIRVANAhalt)
 // ----------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_spriteT(unsigned char sprite,unsigned char tile,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_spriteT_callee(unsigned char sprite,unsigned char tile,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_spriteT(unsigned char sprite,unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_spriteT_callee(unsigned char sprite,unsigned char tile,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_spriteT(a,b,c,d) NIRVANAP_spriteT_callee(a,b,c,d)
 
 
 
-// ----------------------------------------------------------------
+// -----------------------------------------------------------------------
 // Instantly draw wide tile (24x16 pixels) at specified position
 //
 // Parameters:
@@ -205,20 +217,46 @@ extern void __LIB__ __CALLEE__ NIRVANAP_spriteT_callee(unsigned char sprite,unsi
 //     lin: pixel line (0-200, even values only)
 //     col: char column (0-29)
 //
-// WARNING: If this routine is under execution when interrupt
+// WARNING: If the *_raw routine is under execution when interrupt
 //          occurs, program may crash!!! (see NIRVANAhalt)
 //
-// WARNING: Only use this routine if NIRVANA_drawW was enabled!!!
-// ----------------------------------------------------------------
+// WARNING: This routine is only available if NIRVANA_drawW was enabled!!!
+// -----------------------------------------------------------------------
 
-extern void __LIB__ NIRVANAP_drawW(unsigned char tile,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_drawW_callee(unsigned char tile,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_drawW(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_drawW_callee(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_drawW(a,b,c) NIRVANAP_drawW_callee(a,b,c)
 
 
-extern void __LIB__ NIRVANAP_drawW_raw(unsigned char tile,unsigned char lin,unsigned char col);
-extern void __LIB__ __CALLEE__ NIRVANAP_drawW_raw_callee(unsigned char tile,unsigned char lin,unsigned char col);
+extern void __LIB__ NIRVANAP_drawW_raw(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_drawW_raw_callee(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
 #define NIRVANAP_drawW_raw(a,b,c) NIRVANAP_drawW_raw_callee(a,b,c)
+
+
+
+// ----------------------------------------------------------------------------------
+// Executes NIRVANA_drawT for wide sprites but takes as long as NIRVANA_drawW.
+// This way each wide sprite can freely switch between both without affecting timing.
+// ----------------------------------------------------------------------------------
+// Parameters:
+//     tile: tile index (0-255)
+//     lin: pixel line (0-200, even values only)
+//     col: char column (0-30)
+//
+// WARNING: If *_raw routine is under execution when interrupt
+//          occurs, program may crash!!! (see NIRVANAP_halt)
+//
+// WARNING: This routine is only available if NIRVANA_drawW was enabled!!!
+// ----------------------------------------------------------------------------------
+
+extern void __LIB__ NIRVANAP_drawTW(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_drawTW_callee(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+#define NIRVANAP_drawTW(a,b,c) NIRVANAP_drawTW_callee(a,b,c)
+
+
+extern void __LIB__ NIRVANAP_drawTW_raw(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+extern void __LIB__ __CALLEE__ NIRVANAP_drawTW_raw_callee(unsigned char tile,unsigned char lin,unsigned char col) __smallc;
+#define NIRVANAP_drawTW_raw(a,b,c) NIRVANAP_drawTW_raw_callee(a,b,c)
 
 
 
@@ -230,9 +268,8 @@ extern void __LIB__ __CALLEE__ NIRVANAP_drawW_raw_callee(unsigned char tile,unsi
 //     addr: New tile images address
 // ----------------------------------------------------------------
 
-extern void __LIB__ __FASTCALL__ NIRVANAP_tiles(void *addr);
-
-
+extern unsigned char NIRVANAP_TILE_IMAGES[];
+#define NIRVANAP_tiles(addr) intrinsic_store16(_NIRVANAP_TILE_IMAGES,addr)
 
 // ----------------------------------------------------------------
 // Reconfigure NIRVANA ENGINE to read wide bicolor tiles (24x16
@@ -244,9 +281,8 @@ extern void __LIB__ __FASTCALL__ NIRVANAP_tiles(void *addr);
 // WARNING: Only use this routine if NIRVANAP_drawW was enabled!!!
 // ----------------------------------------------------------------
 
-extern void __LIB__ __FASTCALL__ NIRVANAP_wides(void *addr);
-
-
+extern unsigned char NIRVANAP_WIDE_IMAGES[];
+#define NIRVANAP_wides(addr) intrinsic_store16(_NIRVANAP_WIDE_IMAGES,addr)
 
 // ----------------------------------------------------------------
 // Reconfigure NIRVANA ENGINE to read character table from another
@@ -257,9 +293,8 @@ extern void __LIB__ __FASTCALL__ NIRVANAP_wides(void *addr);
 //     addr: New character table address
 // ----------------------------------------------------------------
 
-extern void __LIB__ __FASTCALL__ NIRVANAP_chars(void *addr);
-
-
+extern unsigned char NIRVANAP_CHAR_TABLE[];
+#define NIRVANAP_chars(addr) intrinsic_store16(_NIRVANAP_CHAR_TABLE,addr)
 
 // ----------------------------------------------------------------
 // Advanced conversions

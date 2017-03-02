@@ -11,7 +11,7 @@ SECTION code_nirvanap
 
 PUBLIC NIRVANAP_fillT_raw
 
-EXTERN asm_NIRVANAP_fillT_raw
+EXTERN asm_NIRVANAP_fillT
 
 NIRVANAP_fillT_raw:
 
@@ -25,4 +25,4 @@ NIRVANAP_fillT_raw:
    	inc hl
    	ld a,(hl)       ; attr
 
-   	jp asm_NIRVANAP_fillT_raw
+   	jp asm_NIRVANAP_fillT

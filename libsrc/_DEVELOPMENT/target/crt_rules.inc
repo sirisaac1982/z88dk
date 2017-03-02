@@ -4,34 +4,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-   IFDEF myzorg
-   
-      defc __crt_org_code = myzorg
-   
+   IFDEF CRT_ORG_CODE
+      
+      defc __crt_org_code = CRT_ORG_CODE
+      
    ELSE
-   
-      IFDEF CRT_ORG_CODE
       
-         defc __crt_org_code = CRT_ORG_CODE
-      
+      IFDEF TAR__crt_org_code
+         
+         defc __crt_org_code = TAR__crt_org_code
+         
       ELSE
-      
-         IFDEF TAR__crt_org_code
          
-            defc __crt_org_code = TAR__crt_org_code
+         defc __crt_org_code = DEF__crt_org_code
          
-         ELSE
-         
-            defc __crt_org_code = DEF__crt_org_code
-         
-         ENDIF
-      
       ENDIF
       
-      defc myzorg = __crt_org_code
-         
    ENDIF
-
 
    IFDEF REGISTER_SP
    
@@ -134,7 +123,24 @@
       ENDIF
    
    ENDIF
+
+   IFDEF CRT_ENFORCE_SNAMES
    
+      defc __crt_enforce_snames = CRT_ENFORCE_SNAMES
+   
+   ELSE
+   
+      IFDEF TAR__crt_enforce_snames
+      
+         defc __crt_enforce_snames = TAR__crt_enforce_snames
+      
+      ELSE
+      
+         defc __crt_enforce_snames = DEF__crt_enforce_snames
+      
+      ENDIF
+   
+   ENDIF
    
    IFDEF CRT_INITIALIZE_BSS
    
@@ -173,6 +179,41 @@
       
    ENDIF
 
+   IFDEF CRT_ORG_VECTOR_TABLE
+   
+      defc __crt_org_vector_table = CRT_ORG_VECTOR_TABLE
+   
+   ELSE
+   
+      IFDEF TAR__crt_org_vector_table
+      
+         defc __crt_org_vector_table = TAR__crt_org_vector_table
+      
+      ELSE
+      
+         defc __crt_org_vector_table = DEF__crt_org_vector_table
+      
+      ENDIF
+      
+   ENDIF
+
+   IFDEF CRT_INTERRUPT_MODE
+   
+      defc __crt_interrupt_mode = CRT_INTERRUPT_MODE
+   
+   ELSE
+   
+      IFDEF TAR__crt_interrupt_mode
+      
+         defc __crt_interrupt_mode = TAR__crt_interrupt_mode
+      
+      ELSE
+      
+         defc __crt_interrupt_mode = DEF__crt_interrupt_mode
+      
+      ENDIF
+      
+   ENDIF
 
    IFDEF CRT_ENABLE_STREAMS
    
@@ -466,8 +507,28 @@
       
    ENDIF
    
+   IFDEF CRT_ENABLE_TRAP
+   
+      defc __crt_enable_trap = CRT_ENABLE_TRAP
+   
+   ELSE
+   
+      IFDEF TAR__crt_enable_trap
+      
+         defc __crt_enable_trap = TAR__crt_enable_trap
+      
+      ELSE
+      
+         defc __crt_enable_trap = DEF__crt_enable_trap
+      
+      ENDIF
+      
+   ENDIF
    
    ;; public definitions
+
+   PUBLIC __clib_fopen_max
+   PUBLIC __clib_open_max
    
    PUBLIC __exit_stack_size
    PUBLIC __quickexit_stack_size

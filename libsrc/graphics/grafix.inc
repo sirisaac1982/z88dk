@@ -10,7 +10,7 @@
 ;       See also text/textgfx.inc and text6/textgfx.inc
 ;
 ;
-;	$Id: grafix.inc,v 1.58 2016-11-28 07:33:11 stefano Exp $
+;	$Id: grafix.inc,  (v 1.58 2016/11/28) - 2017-> stefano Exp $
 ;
 
 
@@ -109,7 +109,7 @@ ENDIF
 IF FORzx81udg
 	DEFINE gotgfx
 	defc maxx	= 64
-	defc maxy	= 72
+	defc maxy	= 71
 	defc blankch	= 0
 ENDIF
 
@@ -348,6 +348,13 @@ IF FORsorcerer
 	defc maxx	= 128
 	defc maxy	= 90
 	defc blankch	= 192
+ENDIF
+
+IF FORpacman
+	DEFINE gotgfx
+	defc maxx	= 56
+	defc maxy	= 72
+	defc blankch	= 30
 ENDIF
 
 ; =============================================

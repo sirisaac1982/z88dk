@@ -12,7 +12,7 @@ SECTION code_nirvanap
 
 PUBLIC NIRVANAP_drawT_callee
 
-EXTERN asm_NIRVANAP_drawT
+EXTERN asm_NIRVANAP_drawT_di
 
 NIRVANAP_drawT_callee:
 
@@ -23,4 +23,4 @@ NIRVANAP_drawT_callee:
         ex (sp),hl      ; tile
         ld a,l
 
-	jp asm_NIRVANAP_drawT
+	jp asm_NIRVANAP_drawT_di

@@ -24,6 +24,7 @@
 #include        <time.h>
 #include        <sys/stat.h>
 #include        "zcc.h"
+#include        "regex/regex.h"
 
 #ifdef WIN32
 #include        <direct.h>
@@ -66,6 +67,7 @@ static void            AddLinkSearchPath(arg_t *arg, char *);
 static void            print_help_config(arg_t *arg, char *);
 static void            print_help_text();
 static void            SetString(arg_t *arg, char *);
+static void            GlobalDefc(arg_t *argument, char *);
 static void            PragmaDefine(arg_t *arg, char *);
 static void            PragmaExport(arg_t *arg, char *);
 static void            PragmaRedirect(arg_t *arg, char *);
@@ -78,9 +80,11 @@ static void            write_zcc_defined(char *name, int value, int export);
 
 static void           *mustmalloc(size_t);
 static char           *muststrdup(const char *s);
+static char           *strstrip(char *s);
 static int             hassuffix(char *file, char *suffix_to_check);
 static char           *stripsuffix(char *, char *);
 static char           *changesuffix(char *, char *);
+static char           *find_file_ext(char *filename);
 static char           *last_path_char(char *filename);
 static int             is_path_absolute(char *filename);
 static int             process(char *, char *, char *, char *, enum iostyle, int, int, int);
@@ -104,12 +108,11 @@ static void            configure_maths_library(char **libstring);
 
 static void            remove_temporary_files(void);
 static void            remove_file_with_extension(char *file, char *suffix);
-static void            copy_crt0_to_temp(void);
 static void            ShowErrors(char *, char *);
-static int             shell_command(char *s);
 static int             copyprepend_file(char *src, char *src_extension, char *dest, char *dest_extension, char *prepend);
 static int             copy_file(char *src, char *src_extension, char *dest, char *dest_extension);
 static int             prepend_file(char *src, char *src_extension, char *dest, char *dest_extension, char *prepend);
+static int             copy_defc_file(char *name1, char *ext1, char *name2, char *ext2);
 static void            tempname(char *);
 static int             find_zcc_config_fileFile(char *arg, int argc, char *buf, size_t buflen);
 static void            parse_option(char *option);
@@ -137,6 +140,7 @@ static int             m4only = 0;
 static int             clangonly = 0;
 static int             llvmonly = 0;
 static int             makelib = 0;
+static int             build_bin = 0;
 static int             c_code_in_asm = 0;
 static int             opt_code_size = 0;
 static int             zopt = 0;
@@ -147,6 +151,7 @@ static int             symbolson = 0;
 static int             lston = 0;
 static int             mapon = 0;
 static int             globaldefon = 0;
+static char           *globaldefrefile = NULL;
 static int             preprocessonly = 0;
 static int             relocate = 0;
 static int             relocinfo = 0;
@@ -190,7 +195,9 @@ static char           *c_subtype = NULL;
 static char           *c_clib = NULL;
 static int             c_startup = -2;
 static int             c_nostdlib = 0;
+static int             mz180 = 0;
 static int             c_nocrt = 0;
+static char           *c_crt_incpath = NULL;
 static int             processing_user_command_line_arg = 0;
 
 static char            filenamebuf[FILENAME_MAX + 1];
@@ -395,6 +402,7 @@ static arg_t     myargs[] = {
 	{ "specs", AF_BOOL_TRUE, SetBoolean, &c_print_specs, NULL, "Print out compiler specs" },
 	{ "asm", AF_MORE, SetString, &c_assembler_type, NULL, "Set the assembler type from the command line (z80asm, mpm, asxx, vasm, binutils)" },
 	{ "compiler", AF_MORE, SetString, &c_compiler_type, NULL, "Set the compiler type from the command line (sccz80, sdcc)" },
+    { "mz180", AF_BOOL_TRUE, SetBoolean, &mz180, NULL, "Target the z180 cpu" },
 	{ "crt0", AF_MORE, SetString, &c_crt0, NULL, "Override the crt0 assembler file to use" },
 	{ "-no-crt", AF_BOOL_TRUE, SetBoolean, &c_nocrt, NULL, "Link without crt0 file" },
 	{ "pragma-redirect",AF_MORE,PragmaRedirect,NULL, NULL, "Redirect a function" },
@@ -444,7 +452,7 @@ static arg_t     myargs[] = {
 	{ "-opt-code-size", AF_BOOL_TRUE, SetBoolean, &opt_code_size, NULL, "Optimize for code size (sdcc only)" },
 	{ "zopt", AF_BOOL_TRUE, SetBoolean, &zopt, NULL, "Enable llvm-optimizer (clang only)" },
 	{ "m", AF_BOOL_TRUE, SetBoolean, &mapon, NULL, "Generate an output map of the final executable" },
-	{ "g", AF_BOOL_TRUE, SetBoolean, &globaldefon, NULL, "Generate a global defs file of the final executable" },
+	{ "g", AF_MORE, GlobalDefc, &globaldefrefile, &globaldefon, "Generate a global defc file of the final executable (-g, -gp, -gpf filename)" },
 	{ "s", AF_BOOL_TRUE, SetBoolean, &symbolson, NULL, "Generate a symbol map of the final executable" },
 	{ "-list", AF_BOOL_TRUE, SetBoolean, &lston, NULL, "Generate list files" },
 	{ "o", AF_MORE, SetString, &outputfile, NULL, "Set the output files" },
@@ -479,7 +487,17 @@ static char *muststrdup(const char *s)
 	return r;
 }
 
+static char *strstrip(char *s)
+{
+    char *p;
 
+    while (isspace(*s)) ++s;
+
+    for (p = s + strlen(s); p != s; *p = 0)
+        if (!isspace(*--p)) break;
+
+    return s;
+}
 static int hassuffix(char *name, char *suffix)
 {
 	int             nlen, slen;
@@ -498,7 +516,7 @@ static char *stripsuffix(char *name, char *suffix)
 
 	/* Recursively strip suffix */
 	r = muststrdup(name);
-	while (((p = strrchr(r, '.')) != NULL) && (strcmp(p, suffix) == 0))
+	while (((p = find_file_ext(r)) != NULL) && (strcmp(p, suffix) == 0))
 		*p = '\0';
 	return r;
 }
@@ -507,7 +525,7 @@ static char *changesuffix(char *name, char *suffix)
 {
 	char *p, *r;
 
-	if ((p = strrchr(name, '.')) == 0) {
+	if ((p = find_file_ext(name)) == NULL) {
 		r = mustmalloc(strlen(name) + strlen(suffix) + 1);
 		sprintf(r, "%s%s", name, suffix);
 	}
@@ -591,24 +609,34 @@ int linkthem(char *linker)
 
 	if (compileonly)
     {
-		len = offs = zcc_asprintf(&temp, "%s --output=\"%s\" %s",
+		len = offs = zcc_asprintf(&temp, "%s %s --output=\"%s\" %s",
 			linker,
+            mz180 ? "--cpu=z180" : "",
 			outputfile,
 			linkargs);
 	}
 	else if (makelib)
     {
-		len = offs = zcc_asprintf(&temp, "%s %s -d %s %s -x\"%s\"",
+		len = offs = zcc_asprintf(&temp, "%s %s %s -d %s %s -x\"%s\"",
 			linker,
 			(z80verbose && IS_ASM(ASM_Z80ASM)) ? "-v" : "",
+            mz180 ? "--cpu=z180" : "",
 			IS_ASM(ASM_Z80ASM) ? "" : "-Mo ",
 			linkargs,
 			outputfile);
 	}
 	else
     {
-        len = offs = zcc_asprintf(&temp, "%s -b -d %s -o%s\"%s\" %s%s%s%s%s%s%s%s%s%c%s%s%c",
+        // late assembly for first file which acts as crt
+        if (verbose) printf("\nPROCESSING CRT\n");
+        if (process(".asm", c_extension, c_assembler, c_crt_incpath ? c_crt_incpath : "", assembler_style, 0, YES, NO))
+            exit(1);
+        if (verbose) puts("");
+        free(c_crt_incpath);
+
+        len = offs = zcc_asprintf(&temp, "%s %s -b -d %s -o%s\"%s\" %s%s%s%s%s%s%s%s%s",
             linker,
+            mz180 ? "--cpu=z180" : "",
             IS_ASM(ASM_Z80ASM) ? "" : "-Mo ",
             linker_output_separate_arg ? " " : "",
             outputfile,
@@ -620,17 +648,13 @@ int linkthem(char *linker)
             relocinfo ? "--reloc-info " : "",
             linkargs,
             (c_nostdlib == 0) ? c_linkopts : "",
-            linklibs,
-            (c_nocrt == 0) ? '"' : ' ',
-			(c_nocrt == 0) ? c_crt0 : filelist[0],
-			(c_nocrt == 0) ? ".asm" : "",
-            (c_nocrt == 0) ? '"' : ' ');
+            linklibs);
 	}
 
 	tname[0] = '\0';
 	prj = z80verbose ? fopen(PROJFILE, "w") : NULL;
 
-	if ((nfiles > 1) && IS_ASM(ASM_Z80ASM))
+	if ((nfiles > 2) && IS_ASM(ASM_Z80ASM))
     {
 		// place source files into a list file for z80asm
 
@@ -640,11 +664,11 @@ int linkthem(char *linker)
 
 		for (i = 0; i < nfiles; ++i)
         {
-			if (hassuffix(filelist[i], c_extension))
+            if (hassuffix(filelist[i], c_extension))
             {
-				fprintf(out, "%s\n", filelist[i]);
-				if (prj) fprintf(prj, "%s\n", original_filenames[i]);
-			}
+                fprintf(out, "%s\n", filelist[i]);
+                if (prj) fprintf(prj, "%s\n", original_filenames[i]);
+            }
 		}
 
 		fclose(out);
@@ -671,11 +695,11 @@ int linkthem(char *linker)
 
 		for (i = 0; i < nfiles; ++i)
         {
-			if (hassuffix(filelist[i], c_extension))
+            if (hassuffix(filelist[i], c_extension))
             {
-				offs += snprintf(cmdline + offs, len - offs, " \"%s\"", filelist[i]);
-				if (prj) fprintf(prj, "%s\n", original_filenames[i]);
-			}
+                offs += snprintf(cmdline + offs, len - offs, " \"%s\"", filelist[i]);
+                if (prj) fprintf(prj, "%s\n", original_filenames[i]);
+            }
 		}
 	}
 
@@ -860,9 +884,6 @@ int main(int argc, char **argv)
 	}
 
 
-	/* Copy crt0 to temporary directory */
-	if (c_nocrt == 0) copy_crt0_to_temp();
-
 	/* Mangle math lib name but only for classic compiles */
 	if ((c_clib == 0) || (!strstr(c_clib, "new") && !strstr(c_clib, "sdcc") && !strstr(c_clib, "clang")))
 		if (linker_linklib_first) configure_maths_library(&linker_linklib_first);   // -lm appears here
@@ -901,9 +922,6 @@ int main(int argc, char **argv)
 	BuildOptions(&llvmarg, llvmarg ? "-disable-partial-libcall-inlining " : "-O2 -disable-partial-libcall-inlining ");
 	BuildOptions(&llvmopt, llvmopt ? "-disable-simplify-libcalls -disable-loop-vectorization -disable-slp-vectorization -S " : "-O2 -disable-simplify-libcalls -disable-loop-vectorization -disable-slp-vectorization -S ");
 
-	/* m4 include path finds z88dk macro definition file "z88dk.m4" */
-	BuildOptions(&m4arg, c_m4opts);
-
 	/* Peephole optimization level for sdcc */
 	if (compiler_type == CC_SDCC)
 	{
@@ -923,6 +941,39 @@ int main(int argc, char **argv)
 			break;
 		}
 	}
+
+    /* m4 include path points to target's home directory */
+    if ((ptr = last_path_char(c_crt0)) != NULL) {
+        char *p;
+        p = mustmalloc((ptr - c_crt0 + 7) * sizeof(char));
+        sprintf(p, "-I \"%.*s\"", ptr - c_crt0, c_crt0);
+        BuildOptions(&m4arg, p);
+        free(p);
+    }
+
+    /* m4 include path finds z88dk macro definition file "z88dk.m4" */
+    BuildOptions(&m4arg, c_m4opts);
+
+    build_bin = !m4only && !clangonly && !llvmonly && !preprocessonly && !assembleonly && !compileonly && !makelib;
+
+    /* Activate target's crt file */
+    if ((c_nocrt == 0) && build_bin) {
+        // append target crt to end of filelist
+        add_file_to_process(c_crt0);
+        // move crt to front of filelist
+        ptr = original_filenames[nfiles - 1];
+        memmove(&original_filenames[1], &original_filenames[0], (nfiles - 1) * sizeof(*original_filenames));
+        original_filenames[0] = ptr;
+        ptr = filelist[nfiles - 1];
+        memmove(&filelist[1], &filelist[0], (nfiles - 1) * sizeof(*filelist));
+        filelist[0] = ptr;
+        ptr = temporary_filenames[nfiles - 1];
+        memmove(&temporary_filenames[1], &temporary_filenames[0], (nfiles - 1) * sizeof(*temporary_filenames));
+        temporary_filenames[0] = ptr;
+    }
+
+    /* crt file is now the first file in filelist */
+    c_crt0 = temporary_filenames[0];
 
 	// Parse through the files, handling each one in turn
 	for (i = 0; i < nfiles; i++) {
@@ -1081,9 +1132,10 @@ int main(int argc, char **argv)
 				exit(1);
 		CASE_ASMFILE:
 		case ASMFILE:
-			if (m4only || clangonly || llvmonly || preprocessonly || assembleonly || ((i == 0) && c_nocrt && !compileonly && !makelib))
+			if (m4only || clangonly || llvmonly || preprocessonly || assembleonly)
                 continue;
 
+            // See #16 on github.
             // z80asm is unable to output object files to an arbitrary destination directory.
             // We don't want to assemble files in their original source directory because that would
             // create a temporary object file there which may accidentally overwrite user files.
@@ -1167,8 +1219,7 @@ int main(int argc, char **argv)
                 snprintf(tmp, sizeof(tmp) - 3, "MODULE %s", q);
 
                 // be consistent with z80asm by not having the asm extension part of the module name
-                
-                if ((q = strrchr(tmp, '.')) && (strcmp(q, ".asm") == 0))
+                if ((q = find_file_ext(tmp)) && (strcmp(q, ".asm") == 0))
                     *q = '\0';
                 strcat(tmp, "\n\n");
 
@@ -1181,6 +1232,14 @@ int main(int argc, char **argv)
                 }
 
                 free(p);
+            }
+
+            // must be late assembly for the first file when making a binary
+            if ((i == 0) && build_bin)
+            {
+                c_crt_incpath = ptr;
+                if (verbose) printf("WILL ACT AS CRT\n");
+                continue;
             }
 
 			if (process(".asm", c_extension, c_assembler, ptr, assembler_style, i, YES, NO))
@@ -1253,7 +1312,7 @@ int main(int argc, char **argv)
 	if (linkthem(c_linker))
 		exit(1);
 
-	if (!makelib) {
+	if (build_bin) {
 
 		if (createapp) {
 			/* Building an application - run the appmake command on it */
@@ -1271,10 +1330,8 @@ int main(int argc, char **argv)
 			int status = 0;
 
 			strcpy(filenamebuf, outputfile);
-			if ((oldptr = strrchr(filenamebuf, '.')))
+			if (oldptr = find_file_ext(filenamebuf))
 				*oldptr = 0;
-
-			if (c_nocrt) c_crt0 = changesuffix(filelist[0], "");
 
 			if (mapon && copy_file(c_crt0, ".map", filenamebuf, ".map")) {
 				fprintf(stderr, "Cannot copy map file\n");
@@ -1286,8 +1343,8 @@ int main(int argc, char **argv)
 				status = 1;
 			}
 
-			if (globaldefon && copy_file(c_crt0, ".def", filenamebuf, ".def")) {
-				fprintf(stderr, "Cannot copy global defs file\n");
+			if (globaldefon && copy_defc_file(c_crt0, ".def", filenamebuf, ".def")) {
+				fprintf(stderr, "Cannot create global defc file\n");
 				status = 1;
 			}
 
@@ -1304,6 +1361,151 @@ int main(int argc, char **argv)
 }
 
 
+/* Filter global defc file as it is written to the destination directory.
+ * 
+ * (globaldefon     &   0x2) = make symbols PUBLIC
+ * (globaldefrefile != NULL) = file holding one regular expression per line with
+ *                             leading +- indicating acceptance or rejection for matches
+*/
+
+typedef struct gfilter_s {
+    int      accept;
+    regex_t  preg;
+} GFILTER;
+
+void gdf_cleanup(GFILTER *filter, int nfilter)
+{
+    while (nfilter > 1)
+        regfree(&filter[--nfilter].preg);
+    free(filter);
+}
+
+int copy_defc_file(char *name1, char *ext1, char *name2, char *ext2)
+{
+    FILE *in, *out, *rules;
+    char buffer[LINEMAX + 1];
+    char *line, *ptr;
+    GFILTER *filter;
+    regmatch_t pmatch[3];
+    int nfilter, errcode, lineno, len;
+
+    // the first regular expression is used to parse a z80asm generated defc line
+    filter  = mustmalloc(sizeof(*filter));
+    nfilter = 1;
+    if (regcomp(&filter->preg, "(defc|DEFC)[\t ]+([^\t =]+)", REG_EXTENDED))
+    {
+        fprintf(stderr, "Cannot create regular expressions\n");
+        return 1;
+    }
+
+    // read the filters from the regular expression file
+    if (globaldefrefile)
+    {
+        if ((rules = fopen(globaldefrefile, "r")) == NULL)
+        {
+            fprintf(stderr, "Cannot open rules file %s\n", globaldefrefile);
+            gdf_cleanup(filter, nfilter);
+            return 1;
+        }
+
+        line = NULL;
+        for (lineno = 1; zcc_getdelim(&line, &len, '\n', rules) > 0; ++lineno)
+        {
+            ptr = strstrip(line);
+            if ((*ptr == 0) || (*ptr == ';')) continue;
+            if ((filter = realloc(filter, (nfilter + 1) * sizeof(*filter))) == NULL)
+            {
+                fprintf(stderr, "Cannot realloc global defc filter\n");
+                gdf_cleanup(filter, nfilter);
+                free(line);
+                fclose(rules);
+                return 1;
+            }
+            filter[nfilter].accept = !(*ptr == '-');
+            if ((*ptr == '+') || (*ptr == '-')) ++ptr;
+            while (isspace(*ptr)) ++ptr;
+            if (errcode = regcomp(&filter[nfilter].preg, ptr, REG_EXTENDED))
+            {
+                regerror(errcode, &filter[nfilter].preg, buffer, sizeof(buffer));
+                fprintf(stderr, "Ignoring %s line %u: %s", globaldefrefile, lineno, buffer);
+                regfree(&filter[nfilter].preg);
+                continue;
+            }
+            ++nfilter;
+        }
+        free(line);
+        fclose(rules);
+    }
+
+    // open the defc file generated by z80asm
+    buffer[sizeof(LINEMAX)] = 0;
+    snprintf(buffer, sizeof(buffer) - 1, "%s%s", name1, ext1);
+    if ((in = fopen(buffer, "r")) == NULL)
+    {
+        gdf_cleanup(filter, nfilter);
+        return 1;
+    }
+
+    // create the output defc file
+    snprintf(buffer, sizeof(buffer) - 1, "%s%s", name2, ext2);
+    if ((out = fopen(buffer, "w")) == NULL)
+    {
+        gdf_cleanup(filter, nfilter);
+        fclose(in);
+        return 1;
+    }
+
+    line = NULL;
+    while(zcc_getdelim(&line, &len, '\n', in) > 0)
+    {
+        // determine symbol name
+        if (regexec(&filter->preg, line, sizeof(pmatch)/sizeof(pmatch[0]), pmatch, 0) != 0)
+        {
+            fprintf(stderr, "Cannot find symbol name in:\n%s", line);
+            gdf_cleanup(filter, nfilter);
+            free(line);
+            fclose(in);
+            fclose(out);
+            return 1;
+        }
+        snprintf(buffer, sizeof(buffer) - 1, "%.*s", pmatch[2].rm_eo - pmatch[2].rm_so, &line[pmatch[2].rm_so]);
+
+        // accept or reject
+        if (globaldefrefile)
+        {
+            for (lineno = 1; lineno < nfilter; ++lineno)
+            {
+                if (regexec(&filter[lineno].preg, buffer, 0, NULL, 0) == 0)
+                {
+                    // symbol name matches rule
+                    if (filter[lineno].accept)
+                    {
+                        if (globaldefon & 0x2)
+                            fprintf(out, "\nPUBLIC %s\n", buffer);
+                        fprintf(out, "%s", line);
+                    }
+                    break;
+                }
+            }
+        }
+        else
+        {
+            if (globaldefon & 0x2)
+                fprintf(out, "\nPUBLIC %s\n", buffer);
+            fprintf(out, "%s", line);
+        }
+    }
+
+    gdf_cleanup(filter, nfilter);
+    free(line);
+
+    fclose(in);
+    fclose(out);
+
+    return 0;
+}
+
+
 int copyprepend_file(char *name1, char *ext1, char *name2, char *ext2, char *prepend)
 {
     FILE           *out;
@@ -1313,7 +1515,8 @@ int copyprepend_file(char *name1, char *ext1, char *name2, char *ext2, char *pre
 
     if (prepend == NULL) prepend = "";
 
-    snprintf(buffer, sizeof(buffer), "%s%s", name2, ext2);
+    buffer[sizeof(LINEMAX)] = 0;
+    snprintf(buffer, sizeof(buffer) - 1, "%s%s", name2, ext2);
 
     if ((out = fopen(buffer, "w")) == NULL)
         return 1;
@@ -1357,7 +1560,7 @@ int prepend_file(char *name1, char *ext1, char *name2, char *ext2, char *prepend
 
 int get_filetype_by_suffix(char *name)
 {
-	char      *ext = strrchr(name, '.');
+	char      *ext = find_file_ext(name);
 
 	if (ext == NULL) {
 		return 0;
@@ -1412,9 +1615,10 @@ void BuildAsmLine(char *dest, size_t destlen, char *prefix)
 	offs = snprintf(dest, destlen, "%s", asmargs ? asmargs : " ");
 
 	if (IS_ASM(ASM_Z80ASM)) {
-		offs += snprintf(dest + offs, destlen - offs, "%s%s%s",
+		offs += snprintf(dest + offs, destlen - offs, "%s%s%s%s",
 			prefix,
 			z80verbose ? " -v " : " ",
+            mz180 ? " --cpu=z180 " : " ",
 			symbolson ? " -s " : " ");
 	}
 
@@ -1460,6 +1664,48 @@ void SetString(arg_t *argument, char *arg)
 		}
 	}
 }
+
+void GlobalDefc(arg_t *argument, char *arg)
+{
+    char *ptr = arg + 1;
+
+    if (*ptr++ == 'g')
+    {
+        // global defc is on
+        *argument->num_ptr = 0x1;
+
+        if (*ptr == 'p')
+        {
+            // make defc symbols public
+            *argument->num_ptr |= 0x2;
+            ++ptr;
+        }
+
+        if (*ptr == 'f')
+        {
+            // filename containing regular expressions
+            if (*++ptr == '=') ++ptr;
+            while (isspace(*ptr)) ++ptr;
+
+            if (*ptr != 0)
+                *(char **)argument->data = muststrdup(ptr);
+            else
+            {
+                // try following argument for filename
+                if ((gargc + 1) < max_argc && gargv[gargc + 1][0] != '-')
+                {
+                    /* Aha...non option comes next... */
+                    gargc++;
+                    *(char **)argument->data = muststrdup(gargv[gargc]);
+                }
+                else {
+                    // No option given..
+                }
+            }
+        }
+    }
+}
+
 
 static char *expand_macros(char *arg)
 {
@@ -1631,6 +1877,15 @@ void add_option_to_compiler(char *arg)
 }
 
 
+char *find_file_ext(char *filename)
+{
+    char *p;
+
+    if ((p = last_path_char(filename)) == NULL)
+        p = filename;
+    return strrchr(p, '.');
+}
+
 char *last_path_char(char *filename)
 {
     char *p, *q;
@@ -1759,18 +2014,22 @@ void add_file_to_process(char *filename)
 			}
 
 			/* Add this file to the list of original files */
-			if (strrchr(p, '.') == NULL) {
+			if (find_file_ext(p) == NULL) {
 				// file without extension - see if it exists, exclude directories
 				if ((stat(p, &tmp) == 0) && (!(tmp.st_mode & S_IFDIR))) {
 					fprintf(stderr, "Unrecognized file type %s\n", p);
 					exit(1);
 				}
-				// input file has no extension and does not exist so assume .asm then .o
-				original_filenames[nfiles] = mustmalloc((strlen(p) + 5) * sizeof(char));
+				// input file has no extension and does not exist so assume .asm then .o then .asm.m4
+				original_filenames[nfiles] = mustmalloc((strlen(p) + 8) * sizeof(char));
 				strcpy(original_filenames[nfiles], p);
 				strcat(original_filenames[nfiles], ".asm");
-				if (stat(original_filenames[nfiles], &tmp) != 0)
-					strcpy(strrchr(original_filenames[nfiles], '.'), ".o");
+                if (stat(original_filenames[nfiles], &tmp) != 0)
+                {
+                    strcpy(strrchr(original_filenames[nfiles], '.'), ".o");
+                    if (stat(original_filenames[nfiles], &tmp) != 0)
+                        strcpy(strrchr(original_filenames[nfiles], '.'), ".asm.m4");
+                }
 			}
 			else
 				original_filenames[nfiles] = muststrdup(p);
@@ -1874,7 +2133,11 @@ static void configure_misc_options()
 	// the new c lib uses startup=-1 to mean user supplies the crt
 	// current working dir will be different than when using -crt0
 	if (c_startup >= -1) {
+        char tmp[64];
 		write_zcc_defined("startup", c_startup, 0);
+        snprintf(tmp, sizeof(tmp), "--define=__STARTUP=%d", c_startup);
+        tmp[sizeof(tmp) - 1] = 0;
+        BuildOptions(&m4arg, tmp);
 	}
 
 	if (linkargs == NULL) {
@@ -1984,7 +2247,8 @@ static void configure_compiler()
 	/* compiler= */
 	if ((strcmp(c_compiler_type, "clang") == 0) || (strcmp(c_compiler_type, "sdcc") == 0)) {
 		compiler_type = CC_SDCC;
-		snprintf(buf, sizeof(buf), "-mz80 --no-optsdcc-in-asm --c1mode --emit-externs %s %s %s ", \
+		snprintf(buf, sizeof(buf), "%s --no-optsdcc-in-asm --c1mode --emit-externs %s %s %s ", \
+            (mz180 ? "-mz180 -portmode=z180" : "-mz80"), \
             (sdcc_signed_char ? "--fsigned-char" : ""), \
             (c_code_in_asm ? "" : "--no-c-code-in-asm"), \
             (opt_code_size ? "--opt-code-size" : ""));
@@ -2148,10 +2412,10 @@ void copy_output_files_to_destdir(char *suffix, int die_on_fail)
 	char            fname[FILENAME_MAX + 32];
 
 	// copy each output file having indicated extension
-	for (j = 0; j < nfiles; ++j) {
+	for (j = build_bin ? 1 : 0; j < nfiles; ++j) {
 
 		// check that original file was actually processed
-		if (((ptr = strrchr(original_filenames[j], '.')) == NULL) || (strcmp(ptr, suffix) != 0)) {
+		if (((ptr = find_file_ext(original_filenames[j])) == NULL) || (strcmp(ptr, suffix) != 0)) {
 
 			ptr = changesuffix(filelist[j], suffix);
 
@@ -2199,8 +2463,6 @@ void remove_temporary_files(void)
 
 	/* Show all error files */
 
-	if (c_crt0)
-		ShowErrors(c_crt0, 0);
 	for (j = 0; j < nfiles; j++) {
 		ShowErrors(filelist[j], original_filenames[j]);
 	}
@@ -2218,18 +2480,10 @@ void remove_temporary_files(void)
 			remove_file_with_extension(temporary_filenames[j], ".op3");
 			remove_file_with_extension(temporary_filenames[j], ".opt");
 			remove_file_with_extension(temporary_filenames[j], ".o");
+            remove_file_with_extension(temporary_filenames[j], ".map");
 			remove_file_with_extension(temporary_filenames[j], ".sym");
 			remove_file_with_extension(temporary_filenames[j], ".def");
             remove_file_with_extension(temporary_filenames[j], ".tmp");
-		}
-		if (crtcopied) {
-			remove_file_with_extension(c_crt0, ".asm");
-			remove_file_with_extension(c_crt0, ".opt");
-			remove_file_with_extension(c_crt0, ".err");
-			remove_file_with_extension(c_crt0, ".o");
-			remove_file_with_extension(c_crt0, ".map");
-			remove_file_with_extension(c_crt0, ".sym");
-			remove_file_with_extension(c_crt0, ".def");
 		}
 	}
 }
@@ -2241,30 +2495,6 @@ void remove_file_with_extension(char *file, char *ext)
 	temp = changesuffix(file, ext);
 	remove(temp);
 	free(temp);
-}
-
-
-void copy_crt0_to_temp(void)
-{
-	char            filen[FILENAME_MAX + 1];
-	char           *oldptr, *newptr;
-
-	if (compileonly || assembleonly || preprocessonly)
-		return;
-	tempname(filen);/* Temporary name..get it in filen */
-
-					/*
-					* Now to the copying the files over
-					*/
-	oldptr = c_crt0;
-	if (copy_file(oldptr, ".asm", filen, ".asm") && copy_file(oldptr, ".opt", filen, ".asm")) {
-		fprintf(stderr, "Cannot copy crt0 file\n");
-		exit(1);
-	}
-	crtcopied = 1;
-	newptr = mustmalloc(strlen(filen) + 1);
-	strcpy(newptr, filen);
-	c_crt0 = newptr;
 }
 
 
@@ -2345,7 +2575,7 @@ void tempname(char *filen)
 	/* Allways starts at TMP1.$$$. Does not */
 	else            /* check if file already exists. So is  */
 		tmpnam(filen);    /* not suitable for executing zcc more  */
-	if (ptr = strrchr(filen, '.'))    /* than once without cleaning out
+	if (ptr = find_file_ext(filen))    /* than once without cleaning out
 									  * files. */
 		*ptr = 0;    /* Don't want to risk too long filenames */
 #else

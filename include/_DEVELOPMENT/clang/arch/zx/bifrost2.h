@@ -5,6 +5,7 @@
 #ifndef __BIFROST2_H__
 #define __BIFROST2_H__
 
+#include <arch.h>
 #include <intrinsic.h>
 
 /* ----------------------------------------------------------------
@@ -32,6 +33,22 @@ extern unsigned char BIFROST2_tilemap[81];
 extern void BIFROST2_install(void);
 
 
+
+// ----------------------------------------------------------------
+// Location of BIFROST*2 ISR hook
+// ----------------------------------------------------------------
+
+extern unsigned char BIFROST2_ISR_HOOK[3];
+
+// ----------------------------------------------------------------
+// Location of BIFROST*2 hole
+// ----------------------------------------------------------------
+
+#define BIFROST2_HOLE_SIZE __BIFROST2_HOLE_SIZE
+
+#if BIFROST2_HOLE_SIZE > 0
+extern unsigned char BIFROST2_HOLE[BIFROST2_HOLE_SIZE];
+#endif
 
 // ----------------------------------------------------------------
 // Activate multicolor rendering with BIFROST*2 ENGINE
@@ -75,7 +92,7 @@ extern void BIFROST2_stop(void);
 // Obs: Also available as inline macro (for constant parameters)
 // ----------------------------------------------------------------
 
-extern void BIFROST2_setTile(unsigned int px,unsigned int py,unsigned int tile);
+extern void BIFROST2_setTile(unsigned char px,unsigned char py,unsigned char tile);
 
 
 
@@ -94,7 +111,7 @@ extern void BIFROST2_setTile(unsigned int px,unsigned int py,unsigned int tile);
 // Obs: Also available as inline macro (for constant parameters)
 // ----------------------------------------------------------------
 
-extern unsigned char BIFROST2_getTile(unsigned int px,unsigned int py);
+extern unsigned char BIFROST2_getTile(unsigned char px,unsigned char py);
 
 
 
@@ -110,7 +127,7 @@ extern unsigned char BIFROST2_getTile(unsigned int px,unsigned int py);
 //     Animation group for animated tile, otherwise the same tile index
 // ----------------------------------------------------------------
 
-extern unsigned char BIFROST2_getAnimGroup(unsigned int tile);
+extern unsigned char BIFROST2_getAnimGroup(unsigned char tile);
 
 
 
@@ -126,7 +143,7 @@ extern unsigned char BIFROST2_getAnimGroup(unsigned int tile);
 //     Memory address of the multicolor attribute
 // ----------------------------------------------------------------
 
-extern unsigned char *BIFROST2_findAttrH(unsigned int lin,unsigned int col);
+extern unsigned char *BIFROST2_findAttrH(unsigned char lin,unsigned char col);
 
 
 
@@ -137,9 +154,8 @@ extern unsigned char *BIFROST2_findAttrH(unsigned int lin,unsigned int col);
 //     addr: New tile images address
 // ----------------------------------------------------------------
 
-extern void BIFROST2_resetTileImages(void *addr);
-
-
+extern unsigned char BIFROST2_TILE_IMAGES[];
+#define BIFROST2_resetTileImages(addr)  intrinsic_store16(_BIFROST2_TILE_IMAGES,addr)
 
 // ----------------------------------------------------------------
 // Reconfigure BIFROST*2 ENGINE to use 2 frames per animation group
@@ -189,7 +205,7 @@ extern void BIFROST2_resetAnim4Frames(void);
 //          occurs, program may crash!!! (see BIFROST2_halt)
 // ----------------------------------------------------------------
 
-extern void BIFROST2_drawTileH(unsigned int lin,unsigned int col,unsigned int tile);
+extern void BIFROST2_drawTileH(unsigned char lin,unsigned char col,unsigned char tile);
 
 
 
@@ -205,7 +221,7 @@ extern void BIFROST2_drawTileH(unsigned int lin,unsigned int col,unsigned int ti
 //          occurs, program may crash!!! (see BIFROST2_halt)
 // ----------------------------------------------------------------
 
-extern void BIFROST2_showTilePosH(unsigned int lin,unsigned int col);
+extern void BIFROST2_showTilePosH(unsigned char lin,unsigned char col);
 
 
 
@@ -223,6 +239,19 @@ extern void BIFROST2_showNextTile(void);
 
 
 // ----------------------------------------------------------------
+// Instantly show/animate the next two multicolor tiles currently
+// stored in the tile map position, according to a pre-established
+// drawing order
+//
+// WARNING: If this routine is under execution when interrupt
+//          occurs, program may crash!!! (see BIFROST2_halt)
+// ----------------------------------------------------------------
+
+extern void BIFROST2_showNext2Tiles(void);
+
+
+
+// ----------------------------------------------------------------
 // Instantly change the attributes in a tile area (16x16 pixels) to
 // the specified value (use the same INK and PAPER values to "erase"
 // a tile)
@@ -236,7 +265,7 @@ extern void BIFROST2_showNextTile(void);
 //          occurs, program may crash!!! (see BIFROST2_halt)
 // ----------------------------------------------------------------
 
-extern void BIFROST2_fillTileAttrH(unsigned int lin,unsigned int col,unsigned int attr);
+extern void BIFROST2_fillTileAttrH(unsigned char lin,unsigned char col,unsigned char attr);
 
 
 

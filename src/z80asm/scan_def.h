@@ -2,7 +2,7 @@
 Z88-DK Z80ASM - Z80 Assembler
 
 Copyright (C) Gunther Strube, InterLogic 1993-99
-Copyright (C) Paulo Custodio, 2011-2015
+Copyright (C) Paulo Custodio, 2011-2017
 License: The Artistic License 2.0, http://www.perlfoundation.org/artistic_license_2_0
 Repository: https://github.com/pauloscustodio/z88dk-z80asm
 
@@ -284,6 +284,18 @@ TOKEN_OPCODE(SRA  )
 TOKEN_OPCODE(SRL  )
 TOKEN_OPCODE(SUB  )
 TOKEN_OPCODE(XOR  )
+
+/* Z180 opcodes */
+TOKEN_OPCODE(SLP)
+TOKEN_OPCODE(MLT)
+TOKEN_OPCODE(IN0)
+TOKEN_OPCODE(OUT0)
+TOKEN_OPCODE(OTIM)
+TOKEN_OPCODE(OTIMR)
+TOKEN_OPCODE(OTDM)
+TOKEN_OPCODE(OTDMR)
+TOKEN_OPCODE(TST)
+TOKEN_OPCODE(TSTIO)
 
 /* Z88DK specific opcodes */
 TOKEN_OPCODE(CALL_OZ)

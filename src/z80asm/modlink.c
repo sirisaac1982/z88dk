@@ -2,7 +2,7 @@
 Z88DK Z80 Macro Assembler
 
 Copyright (C) Gunther Strube, InterLogic 1993-99
-Copyright (C) Paulo Custodio, 2011-2015
+Copyright (C) Paulo Custodio, 2011-2017
 License: The Artistic License 2.0, http://www.perlfoundation.org/artistic_license_2_0
 Repository: https://github.com/pauloscustodio/z88dk-z80asm
 */
@@ -308,7 +308,8 @@ static int compute_equ_exprs_once( ExprList *exprs, Bool show_error, Bool module
 
 			/* expressions with symbols from other sections need to be passed to the link phase */
 			if (!module_relative_addr || /* link phase */
-				Expr_is_local_in_section(expr, CURRENTMODULE, CURRENTSECTION) /* or symbols from other sections */
+				(Expr_is_local_in_section(expr, CURRENTMODULE, CURRENTSECTION) &&	/* or symbols from other sections */
+				 Expr_without_addresses(expr))		/* expression with more than one address - needs to be computed at link time */
 				)
 			{
 				set_expr_env(expr, module_relative_addr);
@@ -812,7 +813,6 @@ static int LinkModule_1(char *filename, long fptr_base, Str *section_name, StrHa
 {
     long fptr_namedecl, fptr_modname, fptr_modcode, fptr_libnmdecl;
     int code_size;
-    int origin = -1;
 	FILE *file;
 	Section *section;
 
@@ -838,17 +838,14 @@ static int LinkModule_1(char *filename, long fptr_base, Str *section_name, StrHa
 				if (code_size < 0)
 					break;
 
-				xfget_count_byte_Str(file, section_name);
-				origin = xfget_int32(file);
-				
 				/* load bytes to section */
 				/* BUG_0015: was reading at current position in code area, swaping order of modules */
+				xfget_count_byte_Str(file, section_name);
 				section = new_section(str_data(section_name));
-				if (origin >= 0)
-					section->origin = origin;
+				read_origin(file, section);
 
 				/* if creating relocatable code, ignore origin */
-				if (opts.relocatable && origin >= 0) {
+				if (opts.relocatable && section->origin >= 0) {
 					warn_org_ignored(filename, str_data(section_name));
 					section->origin = -1;
 					section->section_split = FALSE;

@@ -5,6 +5,7 @@
 #ifndef __NIRVANA_PLUS_H__
 #define __NIRVANA_PLUS_H__
 
+#include <arch.h>
 #include <intrinsic.h>
 
 /* ----------------------------------------------------------------
@@ -15,10 +16,6 @@
  * see file "nirvanadem.c".
  * ----------------------------------------------------------------
  */
-
-#ifndef NIRVANAP_TOTAL_ROWS
-#define NIRVANAP_TOTAL_ROWS 23
-#endif
 
 // ----------------------------------------------------------------
 // Activate NIRVANA ENGINE
@@ -54,16 +51,16 @@ extern void NIRVANAP_stop(void) __preserves_regs(b,c,d,e,h,l);
 // Location of NIRVANA ISR hook
 // ----------------------------------------------------------------
 
-#ifdef __CLANG
-   static unsigned char NIRVANAP_isr[3];
-#endif
+extern unsigned char NIRVANAP_ISR_HOOK[3];
 
-#ifdef __SDCC
-   __at (56698+328*NIRVANAP_TOTAL_ROWS) static unsigned char NIRVANAP_isr[3];
-#endif
+// ----------------------------------------------------------------
+// Location and size of NIRVANA hole
+// ----------------------------------------------------------------
 
-#ifdef __SCCZ80
-   static unsigned char NIRVANAP_isr[3] @ (56698+328*NIRVANAP_TOTAL_ROWS);
+#define NIRVANAP_HOLE_SIZE  __NIRVANAP_HOLE_SIZE
+
+#if NIRVANAP_HOLE_SIZE > 0
+extern unsigned char NIRVANAP_HOLE[NIRVANAP_HOLE_SIZE];
 #endif
 
 // ----------------------------------------------------------------
@@ -74,7 +71,7 @@ extern void NIRVANAP_stop(void) __preserves_regs(b,c,d,e,h,l);
 //     lin: pixel line (0-200, even values only)
 //     col: char column (0-30)
 //
-// WARNING: If this routine is under execution when interrupt
+// WARNING: If the *_raw routine is under execution when interrupt
 //          occurs, program may crash!!! (see NIRVANAP_halt)
 // ----------------------------------------------------------------
 
@@ -99,7 +96,7 @@ extern void NIRVANAP_drawT_raw_callee(unsigned char tile,unsigned char lin,unsig
 //     lin: pixel line (0-200, even values only)
 //     col: char column (0-30)
 //
-// WARNING: If this routine is under execution when interrupt
+// WARNING: If the *_raw routine is under execution when interrupt
 //          occurs, program may crash!!! (see NIRVANAhalt)
 // ----------------------------------------------------------------
 
@@ -144,6 +141,21 @@ extern void NIRVANAP_printC_callee(unsigned char ch,void *attrs,unsigned char li
 extern void NIRVANAP_paintC(void *attrs,unsigned char lin,unsigned char col);
 extern void NIRVANAP_paintC_callee(void *attrs,unsigned char lin,unsigned char col) __z88dk_callee;
 #define NIRVANAP_paintC(a,b,c) NIRVANAP_paintC_callee(a,b,c)
+
+
+
+// -----------------------------------------------------------------------------
+// Retrieve a sequence of 4 attribute values from specified 8x8 block
+//
+// Parameters:
+//     attrs: destination for read sequence
+//     lin: pixel line (16-192, even values only)
+//     col: char column (0-31)
+// -----------------------------------------------------------------------------
+
+extern void NIRVANAP_readC(void *attrs,unsigned char lin,unsigned char col);
+extern void NIRVANAP_readC_callee(void *attrs,unsigned char lin,unsigned char col) __z88dk_callee;
+#define NIRVANAP_readC(a,b,c) NIRVANAP_readC_callee(a,b,c)
 
 
 
@@ -195,7 +207,7 @@ extern void NIRVANAP_spriteT_callee(unsigned char sprite,unsigned char tile,unsi
 
 
 
-// ----------------------------------------------------------------
+// -----------------------------------------------------------------------
 // Instantly draw wide tile (24x16 pixels) at specified position
 //
 // Parameters:
@@ -203,11 +215,11 @@ extern void NIRVANAP_spriteT_callee(unsigned char sprite,unsigned char tile,unsi
 //     lin: pixel line (0-200, even values only)
 //     col: char column (0-29)
 //
-// WARNING: If this routine is under execution when interrupt
+// WARNING: If the *_raw routine is under execution when interrupt
 //          occurs, program may crash!!! (see NIRVANAhalt)
 //
-// WARNING: Only use this routine if NIRVANA_drawW was enabled!!!
-// ----------------------------------------------------------------
+// WARNING: This routine is only available if NIRVANA_drawW was enabled!!!
+// -----------------------------------------------------------------------
 
 extern void NIRVANAP_drawW(unsigned char tile,unsigned char lin,unsigned char col);
 extern void NIRVANAP_drawW_callee(unsigned char tile,unsigned char lin,unsigned char col) __z88dk_callee;
@@ -220,6 +232,32 @@ extern void NIRVANAP_drawW_raw_callee(unsigned char tile,unsigned char lin,unsig
 
 
 
+// ----------------------------------------------------------------------------------
+// Executes NIRVANA_drawT for wide sprites but takes as long as NIRVANA_drawW.
+// This way each wide sprite can freely switch between both without affecting timing.
+// ----------------------------------------------------------------------------------
+// Parameters:
+//     tile: tile index (0-255)
+//     lin: pixel line (0-200, even values only)
+//     col: char column (0-30)
+//
+// WARNING: If *_raw routine is under execution when interrupt
+//          occurs, program may crash!!! (see NIRVANAP_halt)
+//
+// WARNING: This routine is only available if NIRVANA_drawW was enabled!!!
+// ----------------------------------------------------------------------------------
+
+extern void NIRVANAP_drawTW(unsigned char tile,unsigned char lin,unsigned char col);
+extern void NIRVANAP_drawTW_callee(unsigned char tile,unsigned char lin,unsigned char col) __z88dk_callee;
+#define NIRVANAP_drawTW(a,b,c) NIRVANAP_drawTW_callee(a,b,c)
+
+
+extern void NIRVANAP_drawTW_raw(unsigned char tile,unsigned char lin,unsigned char col);
+extern void NIRVANAP_drawTW_raw_callee(unsigned char tile,unsigned char lin,unsigned char col) __z88dk_callee;
+#define NIRVANAP_drawTW_raw(a,b,c) NIRVANAP_drawTW_raw_callee(a,b,c)
+
+
+
 // ----------------------------------------------------------------
 // Reconfigure NIRVANA ENGINE to read bicolor tiles (16x16 pixels)
 // from another address (default value is 48000).
@@ -228,11 +266,8 @@ extern void NIRVANAP_drawW_raw_callee(unsigned char tile,unsigned char lin,unsig
 //     addr: New tile images address
 // ----------------------------------------------------------------
 
-extern void NIRVANAP_tiles(void *addr) __preserves_regs(b,c,d,e);
-extern void NIRVANAP_tiles_fastcall(void *addr) __preserves_regs(a,b,c,d,e) __z88dk_fastcall;
-#define NIRVANAP_tiles(a) NIRVANAP_tiles_fastcall(a)
-
-
+extern unsigned char NIRVANAP_TILE_IMAGES[];
+#define NIRVANAP_tiles(addr) intrinsic_store16(_NIRVANAP_TILE_IMAGES,addr)
 
 // ----------------------------------------------------------------
 // Reconfigure NIRVANA ENGINE to read wide bicolor tiles (24x16
@@ -244,11 +279,8 @@ extern void NIRVANAP_tiles_fastcall(void *addr) __preserves_regs(a,b,c,d,e) __z8
 // WARNING: Only use this routine if NIRVANAP_drawW was enabled!!!
 // ----------------------------------------------------------------
 
-extern void NIRVANAP_wides(void *addr) __preserves_regs(b,c,d,e);
-extern void NIRVANAP_wides_fastcall(void *addr) __preserves_regs(a,b,c,d,e) __z88dk_fastcall;
-#define NIRVANAP_wides(a) NIRVANAP_wides_fastcall(a)
-
-
+extern unsigned char NIRVANAP_WIDE_IMAGES[];
+#define NIRVANAP_wides(addr) intrinsic_store16(_NIRVANAP_WIDE_IMAGES,addr)
 
 // ----------------------------------------------------------------
 // Reconfigure NIRVANA ENGINE to read character table from another
@@ -259,11 +291,8 @@ extern void NIRVANAP_wides_fastcall(void *addr) __preserves_regs(a,b,c,d,e) __z8
 //     addr: New character table address
 // ----------------------------------------------------------------
 
-extern void NIRVANAP_chars(void *addr) __preserves_regs(b,c,d,e);
-extern void NIRVANAP_chars_fastcall(void *addr) __preserves_regs(a,b,c,d,e) __z88dk_fastcall;
-#define NIRVANAP_chars(a) NIRVANAP_chars_fastcall(a)
-
-
+extern unsigned char NIRVANAP_CHAR_TABLE[];
+#define NIRVANAP_chars(addr) intrinsic_store16(_NIRVANAP_CHAR_TABLE,addr)
 
 // ----------------------------------------------------------------
 // Advanced conversions

@@ -2,7 +2,7 @@
 Z88DK Z80 Macro Assembler
 
 Copyright (C) Gunther Strube, InterLogic 1993-99
-Copyright (C) Paulo Custodio, 2011-2015
+Copyright (C) Paulo Custodio, 2011-2017
 License: The Artistic License 2.0, http://www.perlfoundation.org/artistic_license_2_0
 Repository: https://github.com/pauloscustodio/z88dk-z80asm
 
@@ -168,3 +168,10 @@ extern void set_origin_directive(int origin);
 
 /* define a new origin, called by the --orgin command line option */
 extern void set_origin_option(int origin);
+
+/* read/write origin to/from input file, for these cases:
+   origin = 0..0xFFFF - origin defined;
+   origin = -1 - origin not defined 
+   origin = -1 and section_split - origin not defined, but section split */
+extern void read_origin(FILE* file, Section *section);
+extern void write_origin(FILE* file, Section *section);
